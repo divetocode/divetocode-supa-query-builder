@@ -1,18 +1,18 @@
 # @divetocode/supa-query-builder (Unofficial)
 
-> **Tiny server‑only Supabase PostgREST query builder.**
->
-> Not affiliated with Supabase. This package is an **unofficial** REST client / query builder that talks to the Supabase **Data API (PostgREST)** with a minimal chainable API.
+> A tiny **Supabase PostgREST** query builder with **browser/server clients** and **RLS helpers**.  
+> **Unofficial** – not affiliated with Supabase.
 
----
+## Why this?
+- **Browser client** uses **Anon Key only** → safe reads/writes under **your RLS policies**.
+- **Server client** uses **Service Role** for admin jobs (RLS bypass; server-only).
+- **RLS helpers**:
+  - **Reader (browser)**: quick “can I read this table?” check.
+  - **Manager (server)**: enable/disable RLS, create/drop policies, list/check policies via **RPC**.
+- Minimal, chainable API over Supabase **REST (PostgREST)**. No ORM “magic”.
 
-## TL;DR
-
-* **What**: Light wrapper around `fetch` for Supabase **REST** with a small query‑builder interface.
-* **Why**: When you want **full control** of HTTP headers, especially *`apikey` (Anon)* vs *`Authorization` (Service Role)*, with **zero ORM magic**.
-* **Where**: **Server‑only** (Next.js Route Handlers, Node.js backends, workers, etc.).
-
-> ⚠️ **Do not use in the browser.** Never ship your `SERVICE_ROLE` key to the client.
+> ⚠️ **Never ship your Service Role key to the browser.**  
+> Use `SupabaseServer` only on the server.
 
 ---
 
@@ -28,197 +28,300 @@ yarn add @divetocode/supa-query-builder
 
 ---
 
-## Quick start (Node / Next.js server)
+## Quick Start
+
+### 1) Browser: public or RLS-allowed reads
 
 ```ts
-import { SupabaseClient } from "@divetocode/supa-query-builder";
+import { SupabaseClient } from '@divetocode/supa-query-builder';
 
-const supabase = new SupabaseClient(
+const supabaseClient = new SupabaseClient(
   process.env.SUPABASE_URL!,
-  process.env.SUPABASE_ANON_KEY!,   // sent as `apikey`
-  process.env.SUPABASE_SERVICE_ROLE_KEY!        // sent as `Authorization: Bearer ...`
+  process.env.SUPABASE_ANON_KEY!  // used for both apikey & Authorization
 );
 
-// SELECT
-const { data: rows, error } = await supabase
-  .from("TB_Products")
-  .select("*")
-  .order("created_at", { ascending: false });
+const { data, error } = await supabaseClient
+  .from('TB_Products')                   // ensure the REST path matches your table name (often lowercase)
+  .select('*')
+  .order('created_at', { ascending: false });
 
-if (error) throw error;
-console.log(rows);
+if (error) console.error(error);
+console.log(data);
+```
+
+> If you always get **empty arrays** in the browser, your **RLS policies are too strict**. See “RLS policy examples” below.
+
+### 2) Server: admin reads/writes (Service Role)
+
+```ts
+import { SupabaseServer } from '@divetocode/supa-query-builder';
+
+const supabaseServer = new SupabaseServer(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_ANON_KEY!,   // apikey header
+  process.env.SUPABASE_SERVICE_ROLE_KEY!        // Authorization: Bearer ...
+);
+
+// SELECT (bypasses RLS)
+const { data } = await supabaseServer.from('TB_Products').select('*');
 
 // INSERT
 const now = new Date().toISOString();
-const { data: inserted } = await supabase
-  .from("TB_Products")
-  .insert([{ name: "MacBook Pro", category: "전자제품", price: 2990000, created_at: now, updated_at: now }])
-  .select("*");
-
-// UPDATE
-const { data: updated } = await supabase
-  .from("TB_Products")
-  .update({ price: 2790000, updated_at: new Date().toISOString() })
-  .eq("id", 1)
-  .select("*");
-
-// DELETE
-const { error: delErr } = await supabase
-  .from("TB_Products")
-  .delete()
-  .eq("id", 1);
+const { data: inserted } = await supabaseServer
+  .from('TB_Products')
+  .insert([{ name: 'MacBook Pro', category: 'Electronics', price: 2990000, created_at: now, updated_at: now }])
+  .select('*');
 ```
+
+> In Next.js, use `SupabaseServer` only inside **Route Handlers / server code**.
 
 ---
 
-## What this is / isn’t
+## RLS Helpers
 
-**This is**
-
-* A tiny **query builder** over Supabase **PostgREST** (REST Data API).
-* A way to **split** headers: `apikey = Anon` **and** `Authorization = Service Role`.
-* A minimal chainable API you can `await`.
-
-**This is NOT**
-
-* An ORM. No models, migrations, relations, or change tracking.
-* A full supabase‑js replacement. It’s focused on REST calls only.
-
-If you need an **ORM**, use Prisma / Drizzle on the server and connect to the same Postgres.
-
----
-
-## API
-
-### Constructor
+### Browser: quick access test
 
 ```ts
-new SupabaseClient(url: string, apiKey: string, authKey?: string, options?: any)
+const supabaseClient = new SupabaseClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_ANON_KEY!
+);
+const { data } = await supabaseClient.rls('TB_Products').testAccess();
+console.log(data); // { canAccess: boolean, status: number, message: string }
 ```
 
-* `url`: Supabase **Project URL** (e.g., `https://xxxx.supabase.co`)
-* `apiKey`: sent as `apikey` header (typically **Anon** key)
-* `authKey`: sent as `Authorization: Bearer ...` (typically **Service Role** key). If omitted, `apiKey` is used for both.
+> `getPolicies()` from the browser is **not recommended** (policy metadata exposure). Use the server manager instead if needed.
 
-### Query entry
+### Server: manage RLS via RPC (requires SQL functions)
 
 ```ts
-client.from(table: string): SupabaseQueryBuilder
-```
-
-### Select
-
-```ts
-.select(columns?: string) // default "*"
-.eq(column: string, value: any)
-.or(expr: string)         // raw PostgREST OR syntax
-.order(column: string, opts?: { ascending?: boolean })
-```
-
-Returns (via `await`) `{ data, error }`.
-
-### Insert / Update / Delete
-
-```ts
-.insert(rows: any[])      // supports .select("*") and optional .single()
-.update(patch: any)       // chain .eq(...).select("*")
-.delete()                 // chain .eq(...)
-```
-
-All return `{ data, error }`. `single()` is a no‑op kept for call‑site compatibility.
-
-> Under the hood, the client always appends `?select=*` for reads. Errors from `fetch` are mapped to `{ data: null, error }`.
-
----
-
-## Security & RLS
-
-* **Server‑only**: put keys in environment variables. Never expose `SERVICE_ROLE` to browsers.
-* With `SERVICE_ROLE` in `Authorization`, **RLS is bypassed**. That’s intended for trusted server code (e.g., admin routes, internal jobs). Use carefully.
-* If you want client‑side reads with `Anon`, don’t pass `authKey` and open **RLS SELECT policies** accordingly.
-
-### Example RLS (read‑only public catalogue)
-
-```sql
-alter table public."TB_Products" enable row level security;
-create policy "read_all" on public."TB_Products" for select to anon, authenticated using (true);
-```
-
----
-
-## Next.js Route Handler example
-
-```ts
-// app/api/products/route.ts
-export const runtime = "node";
-import { NextResponse } from "next/server";
-import { SupabaseClient } from "@divetocode/supa-query-builder";
-
-const supa = new SupabaseClient(
+const manager = new SupabaseServer(
   process.env.SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+).rls('TB_Products');
 
-export async function GET() {
-  const { data, error } = await supa.from("TB_Products").select("*").order("created_at", { ascending: false });
-  if (error) return NextResponse.json({ error: String(error) }, { status: 400 });
-  return NextResponse.json(data);
-}
-
-export async function POST(req: Request) {
-  const body = await req.json();
-  const now = new Date().toISOString();
-  const { data, error } = await supa
-    .from("TB_Products")
-    .insert([{ ...body, created_at: now, updated_at: now }])
-    .select("*");
-  if (error) return NextResponse.json({ error: String(error) }, { status: 400 });
-  return NextResponse.json(data, { status: 201 });
-}
+await manager.enableRLS();
+await manager.createOpenPolicy();            // ALL → using: true (careful!)
+await manager.createPublicReadPolicy();      // SELECT → using: is_public = true
+const { data: policies } = await manager.getPolicies();
+await manager.dropPolicy('TB_Products_open_access');
 ```
+
+> These calls require **Postgres RPC functions** (see next section). Grant **EXECUTE** to `service_role` only.
 
 ---
 
-## TypeScript
+## Required RPC Functions (Server-only)
 
-The return value of each call is:
+Create these **unsafe-by-nature** DDL helpers with extreme care.  
+Use `SECURITY DEFINER`, **revoke from public/anon/authenticated**, and **grant execute to service_role only**.
+
+```sql
+-- Enable/disable RLS ---------------------------------------------------------
+create or replace function public.enable_rls(schema_name text, table_name text)
+returns void language plpgsql security definer as $$
+begin
+  execute format('alter table %I.%I enable row level security', schema_name, table_name);
+end $$;
+
+create or replace function public.disable_rls(schema_name text, table_name text)
+returns void language plpgsql security definer as $$
+begin
+  execute format('alter table %I.%I disable row level security', schema_name, table_name);
+end $$;
+
+-- Create/drop policy ---------------------------------------------------------
+create or replace function public.create_rls_policy(
+  schema_name text,
+  table_name  text,
+  policy_name text,
+  operation   text,  -- SELECT | INSERT | UPDATE | DELETE | ALL
+  condition   text   -- expression for USING ()
+)
+returns void language plpgsql security definer as $$
+declare
+  cmd text := case upper(operation)
+    when 'ALL' then 'all'
+    when 'SELECT' then 'select'
+    when 'INSERT' then 'insert'
+    when 'UPDATE' then 'update'
+    when 'DELETE' then 'delete'
+    else 'all'
+  end;
+begin
+  execute format('create policy %I on %I.%I for %s using (%s)',
+                 policy_name, schema_name, table_name, cmd, condition);
+end $$;
+
+create or replace function public.drop_rls_policy(
+  schema_name text, table_name text, policy_name text
+)
+returns void language plpgsql security definer as $$
+begin
+  execute format('drop policy if exists %I on %I.%I', policy_name, schema_name, table_name);
+end $$;
+
+-- RLS status + list policies --------------------------------------------------
+create or replace function public.check_rls_status(schema_name text, table_name text)
+returns table(enabled boolean) language sql security definer as $$
+  select c.relrowsecurity
+  from pg_class c
+  join pg_namespace n on n.oid = c.relnamespace
+  where n.nspname = schema_name and c.relname = table_name
+$$;
+
+create or replace function public.get_table_policies(schema_name text, table_name text)
+returns table(
+  policy_name text,
+  command text,
+  roles text[],
+  using text,
+  with_check text
+) language sql security definer as $$
+  select polname::text,
+         case polcmd when 'r' then 'select' when 'a' then 'insert'
+                     when 'w' then 'update' when 'd' then 'delete'
+                     else polcmd end,
+         array(select r.rolname from unnest(polroles) r(oid) join pg_roles pr on pr.oid = r.oid),
+         pg_get_expr(polqual, polrelid),
+         pg_get_expr(polwithcheck, polrelid)
+  from pg_policies
+  where schemaname = schema_name and tablename = table_name
+  order by polname
+$$;
+
+-- Lock down privileges: service_role only
+revoke all on function public.enable_rls(text,text) from public, anon, authenticated;
+revoke all on function public.disable_rls(text,text) from public, anon, authenticated;
+revoke all on function public.create_rls_policy(text,text,text,text,text) from public, anon, authenticated;
+revoke all on function public.drop_rls_policy(text,text,text) from public, anon, authenticated;
+revoke all on function public.check_rls_status(text,text) from public, anon, authenticated;
+revoke all on function public.get_table_policies(text,text) from public, anon, authenticated;
+
+grant execute on function public.enable_rls(text,text) to service_role;
+grant execute on function public.disable_rls(text,text) to service_role;
+grant execute on function public.create_rls_policy(text,text,text,text,text) to service_role;
+grant execute on function public.drop_rls_policy(text,text,text) to service_role;
+grant execute on function public.check_rls_status(text,text) to service_role;
+grant execute on function public.get_table_policies(text,text) to service_role;
+```
+
+> Your current `SupabaseRLSManager` passes only `table` → feel free to extend it to accept `schema` too (default: `public`).
+
+---
+
+## RLS Policy Examples (for browser reads)
+
+### 1) Public read (non-sensitive data)
+
+```sql
+alter table public."TB_Products" enable row level security;
+
+drop policy if exists "tb_products_read_all" on public."TB_Products";
+create policy "tb_products_read_all"
+on public."TB_Products"
+for select
+to anon, authenticated
+using (true);
+```
+
+### 2) Public flag (`is_public=true` only)
+
+```sql
+alter table public."TB_Products" enable row level security;
+alter table public."TB_Products" add column if not exists is_public boolean default false;
+
+drop policy if exists "tb_products_read_public" on public."TB_Products";
+create policy "tb_products_read_public"
+on public."TB_Products"
+for select
+to anon, authenticated
+using (is_public is true);
+```
+
+Browser query:
 
 ```ts
-type RestResult<T = any> = { data: T | null; error: unknown | null };
+const { data } = await supa
+  .from('TB_Products')
+  .select('*')
+  .order('created_at', { ascending: false });
 ```
 
-You can cast `T` to your row type to improve DX:
+---
 
+## API Summary
+
+### Browser — `SupabaseClient`
 ```ts
-interface Product { id: number; name: string; /* ... */ }
-const { data } = await supa.from("TB_Products").select("*") as RestResult<Product[]>;
+new SupabaseClient(url: string, apiKey: string, options?: any)
+.from(table: string) -> SupabaseQueryBuilder
+.rls(table: string)  -> SupabaseRLSReader
+```
+- `apiKey`: **Anon Key**
+- Uses Anon Key for **both** `apikey` and `Authorization` headers.
+
+### Server — `SupabaseServer`
+```ts
+new SupabaseServer(url: string, apiKey: string, serverKey: string, options?: any)
+.from(table: string) -> SupabaseQueryBuilder
+.rls(table: string)  -> SupabaseRLSManager
+```
+- `serverKey`: **Service Role Key** (server-only)
+
+### Query Builder (common)
+```ts
+.select(columns?: string = '*')
+.eq(column: string, value: any)
+.or(expr: string) // PostgREST or=(...)
+.order(column: string, opts?: { ascending?: boolean })
+
+.insert(rows: any[]).select(columns?: string).single()
+.update(patch: any).eq(...).select(columns?: string).single()
+.delete().eq(...)
+```
+- All methods `await` to `{ data, error }`.
+
+### RLS Reader (browser)
+```ts
+.testAccess()      // { data: { canAccess, status, message }, error }
+.getPolicies()     // not recommended on client (sensitive metadata)
+```
+
+### RLS Manager (server; RPC required)
+```ts
+.enableRLS()
+.disableRLS()
+.createPolicy(policyName, operation, condition)
+.createPublicReadPolicy()   // using: is_public = true
+.createOpenPolicy()         // using: true (be careful!)
+.dropPolicy(policyName)
+.getPolicies()
+.checkRLSStatus()
 ```
 
 ---
 
-## Why use this over `@supabase/supabase-js`?
+## Troubleshooting
 
-* Need **strict control** of headers (e.g., always `Authorization = SERVICE_ROLE`) without context switching.
-* Prefer a tiny, explicit REST layer with minimal dependencies.
-* You don’t need storage/auth/realtime helpers from `supabase-js`.
-
-If you need those higher‑level features, use `@supabase/supabase-js` or pair this client with official SDKs.
-
----
-
-## Roadmap
-
-* Pagination helpers (`range`, `limit`, `offset`)
-* More filters (`gt`, `gte`, `lt`, `lte`, `like`, `ilike`)
-* Typed column selection utilities
-* Better error types and retry/timeout options
+- **Empty arrays in browser** → RLS blocks your query. Add a policy to allow `select` (e.g., public read or `is_public=true`).
+- **Route path / casing** → REST path is often lowercase (e.g., table `TB_Products` may be exposed as `tb_products` depending on how it was created).
+- **401/403** → Check which headers are sent:
+  - Browser: `Authorization = Anon` → make sure RLS allows it.
+  - Server: `Authorization = Service Role` → verify the key.
+- **RPC 404/401** → Functions are missing or permissions aren’t granted to `service_role`.
 
 ---
 
-## Contributing
+## Security Notes
 
-PRs welcome! Please open an issue first for large changes. Keep the scope minimal to avoid scope‑creep into full ORM territory.
+- **Service Role Key is server-only.** Never include it in client bundles.
+- RLS-management RPCs are **DDL helpers**. Keep them:
+  - `SECURITY DEFINER`  
+  - `REVOKE ALL` from public/anon/authenticated  
+  - `GRANT EXECUTE` to `service_role` only
+- Keep your policies minimal and auditable.
 
 ---
 
