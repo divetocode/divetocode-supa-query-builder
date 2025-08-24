@@ -33,14 +33,14 @@ yarn add @divetocode/supa-query-builder
 ```ts
 import { SupabaseClient } from "@divetocode/supa-query-builder";
 
-const supa = new SupabaseClient(
+const supabase = new SupabaseClient(
   process.env.SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,   // sent as `apikey`
+  process.env.SUPABASE_ANON_KEY!,   // sent as `apikey`
   process.env.SUPABASE_SERVICE_ROLE_KEY!        // sent as `Authorization: Bearer ...`
 );
 
 // SELECT
-const { data: rows, error } = await supa
+const { data: rows, error } = await supabase
   .from("TB_Products")
   .select("*")
   .order("created_at", { ascending: false });
@@ -50,20 +50,20 @@ console.log(rows);
 
 // INSERT
 const now = new Date().toISOString();
-const { data: inserted } = await supa
+const { data: inserted } = await supabase
   .from("TB_Products")
   .insert([{ name: "MacBook Pro", category: "전자제품", price: 2990000, created_at: now, updated_at: now }])
   .select("*");
 
 // UPDATE
-const { data: updated } = await supa
+const { data: updated } = await supabase
   .from("TB_Products")
   .update({ price: 2790000, updated_at: new Date().toISOString() })
   .eq("id", 1)
   .select("*");
 
 // DELETE
-const { error: delErr } = await supa
+const { error: delErr } = await supabase
   .from("TB_Products")
   .delete()
   .eq("id", 1);
