@@ -1,0 +1,47 @@
+{
+  "name": "@divetocode/supa-query-builder",
+  "version": "1.0.0",
+  "description": "supabase",
+  "keywords": [
+    "supabase",
+    "supabase rest",
+    "supabase query builder",
+    "supabase-js",
+    "divetocode"
+  ],
+  "license": "MIT",
+  "author": {
+    "name": "divetocode",
+    "email": "divetocode.official@gmail.com",
+    "url": "https://divetocode.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/divetocode/divetocode-supa-query-builder.git"
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup"
+  },
+  "devDependencies": {
+    "@types/node": "^24.1.0",
+    "tsup": "^7.2.0",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.56.0"
+  }
+}

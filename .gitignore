@@ -1,0 +1,21 @@
+# Node modules (외부 라이브러리)
+node_modules/
+
+# 빌드 결과물
+dist/
+
+# 환경 설정/비밀 키
+.env
+.env.local
+.env.*.local
+
+# TypeScript 캐시
+*.tsbuildinfo
+
+# IDE 설정 파일들
+.vscode/
+.idea/
+
+# OS 생성 파일
+.DS_Store
+Thumbs.db

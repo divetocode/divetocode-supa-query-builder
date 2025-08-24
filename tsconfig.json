@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "module": "ESNext", // 원본은 모듈로 유지
+    "moduleResolution": "Node",
+    "declaration": true,
+    "outDir": "dist/esm",
+    "strict": true,
+    "esModuleInterop": true,
+    "emitDeclarationOnly": false,
+    "declarationDir": "dist/types",
+    "removeComments": false 
+  },
+  "include": ["src"]
+}
