@@ -1,6 +1,6 @@
 {
   "name": "@divetocode/supa-query-builder",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "unofficial supabase query builder",
   "keywords": [
     "supabase",

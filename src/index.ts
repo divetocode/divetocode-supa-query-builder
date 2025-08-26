@@ -56,6 +56,274 @@ export class SupabaseServer {
       this.options
     );
   }
+
+  // 스키마 관리 (테이블 CRUD)
+  schema() {
+    return new SupabaseSchemaManager(
+      this.url,
+      this.apiKey,
+      this.serverKey,
+      this.options
+    );
+  }
+}
+
+// 스키마 관리 클래스 (서버 권한 필요)
+class SupabaseSchemaManager {
+  constructor(
+    private url: string,
+    private apiKey: string,
+    private serverKey: string,
+    private options: any = {}
+  ) {}
+
+  // 모든 테이블 목록 조회
+  async getTables(schema: string = 'public') {
+    try {
+      const response = await this.executeRPC('get_tables_info', { 
+        target_schema: schema 
+      });
+      return response;
+    } catch (error) {
+      return { data: null, error };
+    }
+  }
+
+  // 특정 테이블 정보 조회 (컬럼 정보 포함)
+  async getTableInfo(tableName: string, schema: string = 'public') {
+    try {
+      const response = await this.executeRPC('get_table_info', { 
+        table_name: tableName,
+        target_schema: schema
+      });
+      return response;
+    } catch (error) {
+      return { data: null, error };
+    }
+  }
+
+  // 테이블 생성
+  async createTable(tableName: string, columns: TableColumn[], options?: CreateTableOptions) {
+    try {
+      const response = await this.executeRPC('create_table', {
+        table_name: tableName,
+        columns: columns,
+        schema: options?.schema || 'public',
+        enable_rls: options?.enableRLS || false,
+        add_created_at: options?.addCreatedAt || true,
+        add_updated_at: options?.addUpdatedAt || true
+      });
+      return response;
+    } catch (error) {
+      return { data: null, error };
+    }
+  }
+
+  // 테이블 삭제
+  async dropTable(tableName: string, schema: string = 'public', cascade: boolean = false) {
+    try {
+      const response = await this.executeRPC('drop_table', {
+        table_name: tableName,
+        target_schema: schema,
+        cascade: cascade
+      });
+      return response;
+    } catch (error) {
+      return { data: null, error };
+    }
+  }
+
+  // 컬럼 추가
+  async addColumn(tableName: string, column: TableColumn, schema: string = 'public') {
+    try {
+      const response = await this.executeRPC('add_column', {
+        table_name: tableName,
+        column: column,
+        target_schema: schema
+      });
+      return response;
+    } catch (error) {
+      return { data: null, error };
+    }
+  }
+
+  // 컬럼 수정
+  async alterColumn(tableName: string, columnName: string, changes: ColumnChanges, schema: string = 'public') {
+    try {
+      const response = await this.executeRPC('alter_column', {
+        table_name: tableName,
+        column_name: columnName,
+        changes: changes,
+        target_schema: schema
+      });
+      return response;
+    } catch (error) {
+      return { data: null, error };
+    }
+  }
+
+  // 컬럼 삭제
+  async dropColumn(tableName: string, columnName: string, schema: string = 'public') {
+    try {
+      const response = await this.executeRPC('drop_column', {
+        table_name: tableName,
+        column_name: columnName,
+        target_schema: schema
+      });
+      return response;
+    } catch (error) {
+      return { data: null, error };
+    }
+  }
+
+  // 테이블 이름 변경
+  async renameTable(oldName: string, newName: string, schema: string = 'public') {
+    try {
+      const response = await this.executeRPC('rename_table', {
+        old_name: oldName,
+        new_name: newName,
+        target_schema: schema
+      });
+      return response;
+    } catch (error) {
+      return { data: null, error };
+    }
+  }
+
+  // 컬럼 이름 변경
+  async renameColumn(tableName: string, oldColumnName: string, newColumnName: string, schema: string = 'public') {
+    try {
+      const response = await this.executeRPC('rename_column', {
+        table_name: tableName,
+        old_column_name: oldColumnName,
+        new_column_name: newColumnName,
+        target_schema: schema
+      });
+      return response;
+    } catch (error) {
+      return { data: null, error };
+    }
+  }
+
+  // 인덱스 생성
+  async createIndex(tableName: string, indexName: string, columns: string[], options?: IndexOptions) {
+    try {
+      const response = await this.executeRPC('create_index', {
+        table_name: tableName,
+        index_name: indexName,
+        columns: columns,
+        unique: options?.unique || false,
+        method: options?.method || 'btree',
+        target_schema: options?.schema || 'public'
+      });
+      return response;
+    } catch (error) {
+      return { data: null, error };
+    }
+  }
+
+  // 인덱스 삭제
+  async dropIndex(indexName: string, schema: string = 'public') {
+    try {
+      const response = await this.executeRPC('drop_index', {
+        index_name: indexName,
+        target_schema: schema
+      });
+      return response;
+    } catch (error) {
+      return { data: null, error };
+    }
+  }
+
+  // 테이블 복사 (구조만 또는 데이터 포함)
+  async copyTable(sourceTable: string, targetTable: string, includeData: boolean = false, schema: string = 'public') {
+    try {
+      const response = await this.executeRPC('copy_table', {
+        source_table: sourceTable,
+        target_table: targetTable,
+        include_data: includeData,
+        target_schema: schema
+      });
+      return response;
+    } catch (error) {
+      return { data: null, error };
+    }
+  }
+
+  // 테이블이 존재하는지 확인
+  async tableExists(tableName: string, schema: string = 'public') {
+    try {
+      const response = await this.executeRPC('table_exists', {
+        table_name: tableName,
+        target_schema: schema
+      });
+      return response;
+    } catch (error) {
+      return { data: null, error };
+    }
+  }
+
+  private async executeRPC(functionName: string, params: any) {
+    try {
+      const url = `${this.url}/rest/v1/rpc/${functionName}`;
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.serverKey}`, // SERVER_ROLE 키 사용
+          'apikey': this.apiKey
+        },
+        body: JSON.stringify(params)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error };
+    }
+  }
+}
+
+// 타입 정의
+export interface TableColumn {
+  name: string;
+  type: string; // 'text', 'integer', 'boolean', 'timestamp', 'uuid' 등
+  nullable?: boolean;
+  defaultValue?: any;
+  primaryKey?: boolean;
+  unique?: boolean;
+  references?: {
+    table: string;
+    column: string;
+    onDelete?: 'CASCADE' | 'RESTRICT' | 'SET NULL' | 'SET DEFAULT';
+    onUpdate?: 'CASCADE' | 'RESTRICT' | 'SET NULL' | 'SET DEFAULT';
+  };
+}
+
+export interface CreateTableOptions {
+  schema?: string;
+  enableRLS?: boolean;
+  addCreatedAt?: boolean;
+  addUpdatedAt?: boolean;
+}
+
+export interface ColumnChanges {
+  type?: string;
+  nullable?: boolean;
+  defaultValue?: any;
+  dropDefault?: boolean;
+}
+
+export interface IndexOptions {
+  unique?: boolean;
+  method?: 'btree' | 'hash' | 'gist' | 'spgist' | 'gin' | 'brin';
+  schema?: string;
 }
 
 // 브라우저용 RLS 조회만 가능
