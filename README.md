@@ -2771,10 +2771,7 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ## Support and Resources
 
-- 📚 [Documentation](https://docs.yourproject.com)
-- 🐛 [Issue Tracker](https://github.com/your-repo/issues)
-- 💬 [Community Discord](https://discord.gg/your-server)
-- 📧 [Email Support](mailto:support@yourproject.com)
+- 📧 [Email Support](divetocode.official@gmail.com)
 - 🔗 [Supabase Documentation](https://supabase.com/docs)
 
 ---
